@@ -8,19 +8,26 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
-using UnityEngine.SceneManagement;
 using BepInEx.Configuration;
 
 namespace ArtificeBlizzard
 {
+    enum SnowMode
+    {
+        Always,
+        RandomWhenClear,
+        RandomAnyWeather
+    }
+
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
         const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "0.0.0";
         internal static new ManualLogSource Logger;
-        internal static ConfigEntry<bool> configDaytimeSpawns;
+        internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
-        internal static ConfigEntry<float> configFogDistance;
+        internal static ConfigEntry<float> configFogDistance, configSnowyChance;
+        internal static ConfigEntry<SnowMode> configSnowMode;
 
         void Awake()
         {
@@ -48,9 +55,27 @@ namespace ArtificeBlizzard
                     new AcceptableValueRange<float>(2.4f, 25f)
                 ));
 
-            new Harmony(PLUGIN_GUID).PatchAll();
+            configSnowMode = Config.Bind(
+                "Random",
+                "SnowMode",
+                SnowMode.Always,
+                "When should Artifice be snowy?\n\"Always\" makes Artifice permanently snowy. \"RandomWhenClear\" rolls a random chance to replace mild weather with the blizzard. \"RandomAnyWeather\" will still randomize but allow the blizzard to stack with other weather types.");
 
-            SceneManager.sceneLoaded += ArtificeSceneTransformer.OnSceneLoaded;
+            configSnowyChance = Config.Bind(
+                "Random",
+                "SnowyChance",
+                0.25f,
+                new ConfigDescription("The specific chance that \"SnowMode\" will activate the blizzard.\n(0 = never, 1 = guaranteed, 0.5 = 50% chance, or anything in between)",
+                    new AcceptableValueRange<float>(0f, 1f)
+                ));
+
+            configAlwaysOverrideSpawns = Config.Bind(
+                "Random",
+                "AlwaysOverrideSpawns",
+                false,
+                "(Only affects your hosted games) Determines when \"DaytimeSpawns\" and \"BaboonWeight\" are applied.\nThe default setting (false) will only override vanilla spawns when the blizzard is active.");
+
+            new Harmony(PLUGIN_GUID).PatchAll();
 
             Logger.LogInfo($"{PLUGIN_NAME} v{PLUGIN_VERSION} loaded");
         }
@@ -65,29 +90,55 @@ namespace ArtificeBlizzard
         {
             SelectableLevel artifice = __instance.levels.FirstOrDefault(level => level.name == "ArtificeLevel");
             artifice.levelIncludesSnowFootprints = true;
-            Plugin.Logger.LogInfo("Enabled snow footprints on Artifice");
-            if (Plugin.configDaytimeSpawns.Value)
-            {
-                artifice.maxDaytimeEnemyPowerCount = 20;
-                Plugin.Logger.LogInfo("Daytime spawns are active on Artifice");
-            }
-            else
-            {
-                artifice.maxDaytimeEnemyPowerCount = 0;
-                Plugin.Logger.LogInfo("Disable daytime spawns for Artifice");
-            }
-            artifice.OutsideEnemies.FirstOrDefault(spawnableEnemyWithRarity => spawnableEnemyWithRarity.enemyType.name == "BaboonHawk").rarity = Plugin.configBaboonWeight.Value;
-            Plugin.Logger.LogInfo("Overridden baboon spawn weight for Artifice");
+            Plugin.Logger.LogInfo("Enabled snow footprint caching on Artifice");
+        }
+
+        [HarmonyPatch(typeof(RoundManager), "SetToCurrentLevelWeather")]
+        [HarmonyPostfix]
+        static void RoundManagerPostSetToCurrentLevelWeather(RoundManager __instance)
+        {
+            if (__instance.currentLevel.name == "ArtificeLevel")
+                ArtificeSceneTransformer.RandomizeSnowyWeather();
         }
     }
 
     class ArtificeSceneTransformer
     {
-        internal static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-        {
-            if (scene.name != "Level9Artifice")
-                return;
+        public static bool snowy;
 
+        internal static void RandomizeSnowyWeather()
+        {
+            snowy = Plugin.configSnowMode.Value == SnowMode.Always || ((
+                (Plugin.configSnowMode.Value == SnowMode.RandomWhenClear && TimeOfDay.Instance.currentLevelWeather < LevelWeatherType.Rainy)
+                || Plugin.configSnowMode.Value == SnowMode.RandomAnyWeather)
+                && new System.Random(StartOfRound.Instance.randomMapSeed).NextDouble() <= (double)Plugin.configSnowyChance.Value);
+
+            if (RoundManager.Instance.IsServer)
+                AdjustArtificeSpawns();
+
+            if (snowy)
+                TransformArtificeScene();
+        }
+
+        static void AdjustArtificeSpawns()
+        {
+            bool apply = snowy || Plugin.configAlwaysOverrideSpawns.Value;
+            if (!Plugin.configDaytimeSpawns.Value && apply)
+            {
+                StartOfRound.Instance.currentLevel.maxDaytimeEnemyPowerCount = 0;
+                Plugin.Logger.LogInfo("Disable daytime spawns for Artifice");
+            }
+            else
+            {
+                StartOfRound.Instance.currentLevel.maxDaytimeEnemyPowerCount = 20;
+                Plugin.Logger.LogInfo("Daytime spawns are active on Artifice");
+            }
+            StartOfRound.Instance.currentLevel.OutsideEnemies.FirstOrDefault(spawnableEnemyWithRarity => spawnableEnemyWithRarity.enemyType.name == "BaboonHawk").rarity = apply ? Plugin.configBaboonWeight.Value : 7;
+            Plugin.Logger.LogInfo("Overridden baboon spawn weight for Artifice");
+        }
+
+        static void TransformArtificeScene()
+        {
             AssetBundle artificeBlizzardAssets;
             try
             {
@@ -102,26 +153,23 @@ namespace ArtificeBlizzard
 
             Transform environment = GameObject.Find("/Environment").transform;
             Transform tree003 = environment.Find("tree.003_LOD0");
-            Transform brightDay = environment.Find("Lighting/BrightDay");
-            Transform blizzardSunAnimContainer = brightDay.Find("Sun/BlizzardSunAnimContainer");
 
             Plugin.Logger.LogInfo("Setup \"snowstorm\" fog");
-            LocalVolumetricFog localVolumetricFog = brightDay.Find("Local Volumetric Fog (1)").GetComponent<LocalVolumetricFog>();
+            LocalVolumetricFog localVolumetricFog = environment.Find("Lighting/BrightDay/Local Volumetric Fog (1)").GetComponent<LocalVolumetricFog>();
             localVolumetricFog.parameters.meanFreePath = Plugin.configFogDistance.Value;
             localVolumetricFog.parameters.albedo = new Color(0.8254717f, 0.9147653f, 1f);
 
             Plugin.Logger.LogInfo("Override global volume");
-            Volume skyAndFogGlobalVolume = blizzardSunAnimContainer.Find("Sky and Fog Global Volume").GetComponent<Volume>();
+            Volume skyAndFogGlobalVolume = TimeOfDay.Instance.sunAnimator.transform.Find("Sky and Fog Global Volume").GetComponent<Volume>();
             skyAndFogGlobalVolume.profile = artificeBlizzardAssets.LoadAsset<VolumeProfile>("SnowyFog");
 
             Plugin.Logger.LogInfo("Override time-of-day animations");
-            Animator blizzardSunAnim = blizzardSunAnimContainer.GetComponent<Animator>();
-            AnimatorOverrideController animatorOverrideController = new(blizzardSunAnim.runtimeAnimatorController);
+            AnimatorOverrideController animatorOverrideController = new(TimeOfDay.Instance.sunAnimator.runtimeAnimatorController);
             List<KeyValuePair<AnimationClip, AnimationClip>> overrides = new();
-            foreach (AnimationClip clip in blizzardSunAnim.runtimeAnimatorController.animationClips)
+            foreach (AnimationClip clip in TimeOfDay.Instance.sunAnimator.runtimeAnimatorController.animationClips)
                 overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, artificeBlizzardAssets.LoadAsset<AnimationClip>(clip.name.Replace("Sun", "SunTypeC"))));
             animatorOverrideController.ApplyOverrides(overrides);
-            blizzardSunAnim.runtimeAnimatorController = animatorOverrideController;
+            TimeOfDay.Instance.sunAnimator.runtimeAnimatorController = animatorOverrideController;
 
             Plugin.Logger.LogInfo("Repaint terrain");
             Transform artificeTerrainCutDown = environment.Find("ArtificeTerrainCutDown");
