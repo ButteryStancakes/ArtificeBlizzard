@@ -22,7 +22,7 @@ namespace ArtificeBlizzard
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "0.0.0";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.0";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -42,16 +42,22 @@ namespace ArtificeBlizzard
             configBaboonWeight = Config.Bind(
                 "Spawning",
                 "BaboonWeight",
-                0,
+                7,
                 new ConfigDescription("(Only affects your hosted games) Spawn weight for baboon hawks. Vanilla is 7.\nFor comparison, Old Birds have 45, forest keepers have 23, eyeless dogs have 19, and earth leviathans have 6.",
                     new AcceptableValueRange<int>(0, 100)
                 ));
 
+            configAlwaysOverrideSpawns = Config.Bind(
+                "Spawning",
+                "AlwaysOverrideSpawns",
+                false,
+                "(Only affects your hosted games) Determines when \"DaytimeSpawns\" and \"BaboonWeight\" are applied.\nThe default setting (false) will only override vanilla spawns when the blizzard is active.");
+
             configFogDistance = Config.Bind(
                 "Visuals",
                 "FogDistance",
-                3.3f,
-                new ConfigDescription("Controls how \"thick\" the snowstorm is. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5, and Dine uses 8. Artifice uses 25 in vanilla.",
+                4f,
+                new ConfigDescription("Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5, and Dine uses 8. Artifice uses 25 in vanilla.",
                     new AcceptableValueRange<float>(2.4f, 25f)
                 ));
 
@@ -69,11 +75,8 @@ namespace ArtificeBlizzard
                     new AcceptableValueRange<float>(0f, 1f)
                 ));
 
-            configAlwaysOverrideSpawns = Config.Bind(
-                "Random",
-                "AlwaysOverrideSpawns",
-                false,
-                "(Only affects your hosted games) Determines when \"DaytimeSpawns\" and \"BaboonWeight\" are applied.\nThe default setting (false) will only override vanilla spawns when the blizzard is active.");
+            Config.Bind("Random", "AlwaysOverrideSpawns", false, "Legacy setting, moved to \"Spawning\" section");
+            Config.Remove(Config["Random", "AlwaysOverrideSpawns"].Definition);
 
             new Harmony(PLUGIN_GUID).PatchAll();
 
@@ -153,23 +156,26 @@ namespace ArtificeBlizzard
 
             Transform environment = GameObject.Find("/Environment").transform;
             Transform tree003 = environment.Find("tree.003_LOD0");
+            Transform brightDay = environment.Find("Lighting/BrightDay");
+            Transform blizzardSunAnimContainer = brightDay.Find("Sun/BlizzardSunAnimContainer");
 
             Plugin.Logger.LogInfo("Setup \"snowstorm\" fog");
-            LocalVolumetricFog localVolumetricFog = environment.Find("Lighting/BrightDay/Local Volumetric Fog (1)").GetComponent<LocalVolumetricFog>();
+            LocalVolumetricFog localVolumetricFog = brightDay.Find("Local Volumetric Fog (1)").GetComponent<LocalVolumetricFog>();
             localVolumetricFog.parameters.meanFreePath = Plugin.configFogDistance.Value;
             localVolumetricFog.parameters.albedo = new Color(0.8254717f, 0.9147653f, 1f);
 
             Plugin.Logger.LogInfo("Override global volume");
-            Volume skyAndFogGlobalVolume = TimeOfDay.Instance.sunAnimator.transform.Find("Sky and Fog Global Volume").GetComponent<Volume>();
+            Volume skyAndFogGlobalVolume = blizzardSunAnimContainer.Find("Sky and Fog Global Volume").GetComponent<Volume>();
             skyAndFogGlobalVolume.profile = artificeBlizzardAssets.LoadAsset<VolumeProfile>("SnowyFog");
 
             Plugin.Logger.LogInfo("Override time-of-day animations");
-            AnimatorOverrideController animatorOverrideController = new(TimeOfDay.Instance.sunAnimator.runtimeAnimatorController);
+            Animator blizzardSunAnim = blizzardSunAnimContainer.GetComponent<Animator>();
+            AnimatorOverrideController animatorOverrideController = new(blizzardSunAnim.runtimeAnimatorController);
             List<KeyValuePair<AnimationClip, AnimationClip>> overrides = new();
-            foreach (AnimationClip clip in TimeOfDay.Instance.sunAnimator.runtimeAnimatorController.animationClips)
+            foreach (AnimationClip clip in blizzardSunAnim.runtimeAnimatorController.animationClips)
                 overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, artificeBlizzardAssets.LoadAsset<AnimationClip>(clip.name.Replace("Sun", "SunTypeC"))));
             animatorOverrideController.ApplyOverrides(overrides);
-            TimeOfDay.Instance.sunAnimator.runtimeAnimatorController = animatorOverrideController;
+            blizzardSunAnim.runtimeAnimatorController = animatorOverrideController;
 
             Plugin.Logger.LogInfo("Repaint terrain");
             Transform artificeTerrainCutDown = environment.Find("ArtificeTerrainCutDown");
