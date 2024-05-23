@@ -57,7 +57,7 @@ namespace ArtificeBlizzard
                 "Visuals",
                 "FogDistance",
                 4f,
-                new ConfigDescription("Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5, and Dine uses 8. Artifice uses 25 in vanilla.",
+                new ConfigDescription("Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5.0, and Dine uses 8.0. Artifice uses 25.0 in vanilla.",
                     new AcceptableValueRange<float>(2.4f, 25f)
                 ));
 
