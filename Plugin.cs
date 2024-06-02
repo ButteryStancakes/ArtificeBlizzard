@@ -22,7 +22,7 @@ namespace ArtificeBlizzard
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.0";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.1";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -42,7 +42,7 @@ namespace ArtificeBlizzard
             configBaboonWeight = Config.Bind(
                 "Spawning",
                 "BaboonWeight",
-                7,
+                1,
                 new ConfigDescription("(Only affects your hosted games) Spawn weight for baboon hawks. Vanilla is 7.\nFor comparison, Old Birds have 45, forest keepers have 23, eyeless dogs have 19, and earth leviathans have 6.",
                     new AcceptableValueRange<int>(0, 100)
                 ));
@@ -56,7 +56,7 @@ namespace ArtificeBlizzard
             configFogDistance = Config.Bind(
                 "Visuals",
                 "FogDistance",
-                4f,
+                3.7f,
                 new ConfigDescription("Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5.0, and Dine uses 8.0. Artifice uses 25.0 in vanilla.",
                     new AcceptableValueRange<float>(2.4f, 25f)
                 ));
@@ -142,6 +142,16 @@ namespace ArtificeBlizzard
 
         static void TransformArtificeScene()
         {
+            Transform environment = GameObject.Find("/Environment").transform;
+            Transform tree003 = environment.Find("tree.003_LOD0");
+
+            // Imperium can cause this function to occur during orbit phase, when the Artifice scene is unloaded...
+            if (tree003 == null)
+            {
+                Plugin.Logger.LogWarning("TransformArtificeScene() called, but \"Level9Artifice\" doesn't seem to be loaded");
+                return;
+            }
+
             AssetBundle artificeBlizzardAssets;
             try
             {
@@ -154,8 +164,6 @@ namespace ArtificeBlizzard
                 return;
             }
 
-            Transform environment = GameObject.Find("/Environment").transform;
-            Transform tree003 = environment.Find("tree.003_LOD0");
             Transform brightDay = environment.Find("Lighting/BrightDay");
             Transform blizzardSunAnimContainer = brightDay.Find("Sun/BlizzardSunAnimContainer");
 
