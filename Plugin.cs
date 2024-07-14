@@ -19,15 +19,23 @@ namespace ArtificeBlizzard
         RandomAnyWeather
     }
 
+    enum FogColor
+    {
+        Neutral,
+        Bluish,
+        BrightBlue
+    }
+
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.1";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.2";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
         internal static ConfigEntry<float> configFogDistance, configSnowyChance;
         internal static ConfigEntry<SnowMode> configSnowMode;
+        internal static ConfigEntry<FogColor> configFogColor;
 
         void Awake()
         {
@@ -53,10 +61,16 @@ namespace ArtificeBlizzard
                 false,
                 "(Only affects your hosted games) Determines when \"DaytimeSpawns\" and \"BaboonWeight\" are applied.\nThe default setting (false) will only override vanilla spawns when the blizzard is active.");
 
+            configFogColor = Config.Bind(
+                "Visuals",
+                "FogColor",
+                FogColor.Neutral,
+                "Changes the color of the snowstorm.\n\"Neutral\" matches Rend and Dine, \"Bluish\" adds a slight blue tint, and \"BrightBlue\" is the original color used in earlier versions of this mod.");
+
             configFogDistance = Config.Bind(
                 "Visuals",
                 "FogDistance",
-                3.7f,
+                8f,
                 new ConfigDescription("Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5.0, and Dine uses 8.0. Artifice uses 25.0 in vanilla.",
                     new AcceptableValueRange<float>(2.4f, 25f)
                 ));
@@ -170,7 +184,10 @@ namespace ArtificeBlizzard
             Plugin.Logger.LogInfo("Setup \"snowstorm\" fog");
             LocalVolumetricFog localVolumetricFog = brightDay.Find("Local Volumetric Fog (1)").GetComponent<LocalVolumetricFog>();
             localVolumetricFog.parameters.meanFreePath = Plugin.configFogDistance.Value;
-            localVolumetricFog.parameters.albedo = new Color(0.8254717f, 0.9147653f, 1f);
+            if (Plugin.configFogColor.Value == FogColor.BrightBlue)
+                localVolumetricFog.parameters.albedo = new Color(0.8254717f, 0.9147653f, 1f);
+            else if (Plugin.configFogColor.Value == FogColor.Bluish)
+                localVolumetricFog.parameters.albedo = new Color(0.55291027249f, 0.61272013478f, 0.6698113f);
 
             Plugin.Logger.LogInfo("Override global volume");
             Volume skyAndFogGlobalVolume = blizzardSunAnimContainer.Find("Sky and Fog Global Volume").GetComponent<Volume>();
@@ -179,7 +196,7 @@ namespace ArtificeBlizzard
             Plugin.Logger.LogInfo("Override time-of-day animations");
             Animator blizzardSunAnim = blizzardSunAnimContainer.GetComponent<Animator>();
             AnimatorOverrideController animatorOverrideController = new(blizzardSunAnim.runtimeAnimatorController);
-            List<KeyValuePair<AnimationClip, AnimationClip>> overrides = new();
+            List<KeyValuePair<AnimationClip, AnimationClip>> overrides = [];
             foreach (AnimationClip clip in blizzardSunAnim.runtimeAnimatorController.animationClips)
                 overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, artificeBlizzardAssets.LoadAsset<AnimationClip>(clip.name.Replace("Sun", "SunTypeC"))));
             animatorOverrideController.ApplyOverrides(overrides);
