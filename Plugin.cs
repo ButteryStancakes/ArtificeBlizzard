@@ -29,7 +29,7 @@ namespace ArtificeBlizzard
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.2";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.3";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -150,7 +150,9 @@ namespace ArtificeBlizzard
                 StartOfRound.Instance.currentLevel.maxDaytimeEnemyPowerCount = 20;
                 Plugin.Logger.LogInfo("Daytime spawns are active on Artifice");
             }
-            StartOfRound.Instance.currentLevel.OutsideEnemies.FirstOrDefault(spawnableEnemyWithRarity => spawnableEnemyWithRarity.enemyType.name == "BaboonHawk").rarity = apply ? Plugin.configBaboonWeight.Value : 7;
+            SpawnableEnemyWithRarity baboons = StartOfRound.Instance.currentLevel.OutsideEnemies.FirstOrDefault(spawnableEnemyWithRarity => spawnableEnemyWithRarity.enemyType.name == "BaboonHawk");
+            if (baboons != null)
+                baboons.rarity = apply ? Plugin.configBaboonWeight.Value : 7;
             Plugin.Logger.LogInfo("Overridden baboon spawn weight for Artifice");
         }
 
