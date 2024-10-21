@@ -29,7 +29,7 @@ namespace ArtificeBlizzard
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.3";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.4";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -203,6 +203,8 @@ namespace ArtificeBlizzard
                 overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, artificeBlizzardAssets.LoadAsset<AnimationClip>(clip.name.Replace("Sun", "SunTypeC"))));
             animatorOverrideController.ApplyOverrides(overrides);
             blizzardSunAnim.runtimeAnimatorController = animatorOverrideController;
+            // new: fix sun position for eclipse
+            blizzardSunAnimContainer.Find("SunTexture").localPosition = new Vector3(0f, 0f, -195f);
 
             Plugin.Logger.LogInfo("Repaint terrain");
             Transform artificeTerrainCutDown = environment.Find("ArtificeTerrainCutDown");
