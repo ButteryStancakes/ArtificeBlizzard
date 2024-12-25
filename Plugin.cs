@@ -29,7 +29,7 @@ namespace ArtificeBlizzard
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.4";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.6";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -107,7 +107,7 @@ namespace ArtificeBlizzard
         {
             SelectableLevel artifice = __instance.levels.FirstOrDefault(level => level.name == "ArtificeLevel");
             artifice.levelIncludesSnowFootprints = true;
-            Plugin.Logger.LogInfo("Enabled snow footprint caching on Artifice");
+            Plugin.Logger.LogDebug("Enabled snow footprint caching on Artifice");
         }
 
         [HarmonyPatch(typeof(RoundManager), "SetToCurrentLevelWeather")]
@@ -159,10 +159,12 @@ namespace ArtificeBlizzard
         static void TransformArtificeScene()
         {
             Transform environment = GameObject.Find("/Environment").transform;
-            Transform tree003 = environment.Find("tree.003_LOD0");
+            Transform tree003 = environment?.Find("tree.003_LOD0");
+            Transform brightDay = environment?.Find("Lighting/BrightDay");
+            Transform blizzardSunAnimContainer = brightDay?.Find("Sun/BlizzardSunAnimContainer");
 
             // Imperium can cause this function to occur during orbit phase, when the Artifice scene is unloaded...
-            if (tree003 == null)
+            if (environment == null || tree003 == null || brightDay == null || blizzardSunAnimContainer == null)
             {
                 Plugin.Logger.LogWarning("TransformArtificeScene() called, but \"Level9Artifice\" doesn't seem to be loaded");
                 return;
@@ -180,70 +182,113 @@ namespace ArtificeBlizzard
                 return;
             }
 
-            Transform brightDay = environment.Find("Lighting/BrightDay");
-            Transform blizzardSunAnimContainer = brightDay.Find("Sun/BlizzardSunAnimContainer");
+            Plugin.Logger.LogDebug("Setup \"snowstorm\" fog");
+            LocalVolumetricFog localVolumetricFog = brightDay.Find("Local Volumetric Fog (1)")?.GetComponent<LocalVolumetricFog>();
+            if (localVolumetricFog != null)
+            {
+                localVolumetricFog.parameters.meanFreePath = Plugin.configFogDistance.Value;
+                if (Plugin.configFogColor.Value == FogColor.BrightBlue)
+                    localVolumetricFog.parameters.albedo = new Color(0.8254717f, 0.9147653f, 1f);
+                else if (Plugin.configFogColor.Value == FogColor.Bluish)
+                    localVolumetricFog.parameters.albedo = new Color(0.55291027249f, 0.61272013478f, 0.6698113f);
+            }
+            else
+                Plugin.Logger.LogWarning("Could not find fog component. Has an update changed the scene hierarchy?");
 
-            Plugin.Logger.LogInfo("Setup \"snowstorm\" fog");
-            LocalVolumetricFog localVolumetricFog = brightDay.Find("Local Volumetric Fog (1)").GetComponent<LocalVolumetricFog>();
-            localVolumetricFog.parameters.meanFreePath = Plugin.configFogDistance.Value;
-            if (Plugin.configFogColor.Value == FogColor.BrightBlue)
-                localVolumetricFog.parameters.albedo = new Color(0.8254717f, 0.9147653f, 1f);
-            else if (Plugin.configFogColor.Value == FogColor.Bluish)
-                localVolumetricFog.parameters.albedo = new Color(0.55291027249f, 0.61272013478f, 0.6698113f);
+            /*Plugin.Logger.LogDebug("Override global volume");
+            Volume skyAndFogGlobalVolume = blizzardSunAnimContainer.Find("Sky and Fog Global Volume")?.GetComponent<Volume>();
+            if (skyAndFogGlobalVolume != null)
+                skyAndFogGlobalVolume.profile = artificeBlizzardAssets.LoadAsset<VolumeProfile>("SnowyFog");
+            else
+                Plugin.Logger.LogWarning("Could not find global volume. Has an update changed the scene hierarchy?");*/
 
-            Plugin.Logger.LogInfo("Override global volume");
-            Volume skyAndFogGlobalVolume = blizzardSunAnimContainer.Find("Sky and Fog Global Volume").GetComponent<Volume>();
-            skyAndFogGlobalVolume.profile = artificeBlizzardAssets.LoadAsset<VolumeProfile>("SnowyFog");
-
-            Plugin.Logger.LogInfo("Override time-of-day animations");
+            Plugin.Logger.LogDebug("Override time-of-day animations");
             Animator blizzardSunAnim = blizzardSunAnimContainer.GetComponent<Animator>();
-            AnimatorOverrideController animatorOverrideController = new(blizzardSunAnim.runtimeAnimatorController);
-            List<KeyValuePair<AnimationClip, AnimationClip>> overrides = [];
-            foreach (AnimationClip clip in blizzardSunAnim.runtimeAnimatorController.animationClips)
-                overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, artificeBlizzardAssets.LoadAsset<AnimationClip>(clip.name.Replace("Sun", "SunTypeC"))));
-            animatorOverrideController.ApplyOverrides(overrides);
-            blizzardSunAnim.runtimeAnimatorController = animatorOverrideController;
-            // new: fix sun position for eclipse
-            blizzardSunAnimContainer.Find("SunTexture").localPosition = new Vector3(0f, 0f, -195f);
+            if (blizzardSunAnim != null)
+            {
+                AnimatorOverrideController animatorOverrideController = new(blizzardSunAnim.runtimeAnimatorController);
+                List<KeyValuePair<AnimationClip, AnimationClip>> overrides = [];
+                foreach (AnimationClip clip in blizzardSunAnim.runtimeAnimatorController.animationClips)
+                    overrides.Add(new KeyValuePair<AnimationClip, AnimationClip>(clip, artificeBlizzardAssets.LoadAsset<AnimationClip>(clip.name.Replace("Sun", "SunTypeC"))));
+                animatorOverrideController.ApplyOverrides(overrides);
+                blizzardSunAnim.runtimeAnimatorController = animatorOverrideController;
+ 
+                Transform sunTexture = blizzardSunAnimContainer.Find("SunTexture");
+                if (sunTexture != null)
+                    sunTexture.localPosition = new Vector3(0f, 0f, -195f);
+                else
+                    Plugin.Logger.LogWarning("Could not find sun object. Has an update changed the scene hierarchy?");
+            }
+            else
+                Plugin.Logger.LogWarning("Could not find sun animator. Has an update changed the scene hierarchy?");
 
-            Plugin.Logger.LogInfo("Repaint terrain");
+            Plugin.Logger.LogDebug("Repaint terrain");
             Transform artificeTerrainCutDown = environment.Find("ArtificeTerrainCutDown");
-            artificeTerrainCutDown.GetComponent<Renderer>().material = artificeBlizzardAssets.LoadAsset<Material>("ArtificeTerrainSplatmapLit");
-            artificeTerrainCutDown.tag = "Snow";
-
-            Plugin.Logger.LogInfo("Change OOB material");
-            GameObject outOfBoundsTerrain = GameObject.Find("/OutOfBoundsTerrain");
-            Material snowMatTiled = artificeBlizzardAssets.LoadAsset<Material>("SnowMatTiled");
-            foreach (Renderer rend in outOfBoundsTerrain.GetComponentsInChildren<Renderer>())
+            if (artificeTerrainCutDown != null)
             {
-                rend.material = snowMatTiled;
-                rend.tag = "Snow";
+                artificeTerrainCutDown.GetComponent<Renderer>().material = artificeBlizzardAssets.LoadAsset<Material>("ArtificeTerrainSplatmapLit");
+                artificeTerrainCutDown.tag = "Snow";
+
+                Plugin.Logger.LogDebug("Change OOB material");
+                GameObject outOfBoundsTerrain = GameObject.Find("/OutOfBoundsTerrain");
+                if (outOfBoundsTerrain != null)
+                {
+                    Material snowMatTiled = artificeBlizzardAssets.LoadAsset<Material>("SnowMatTiled");
+                    foreach (Renderer rend in outOfBoundsTerrain.GetComponentsInChildren<Renderer>())
+                    {
+                        rend.material = snowMatTiled;
+                        rend.tag = "Snow";
+                    }
+                }
+                else
+                    Plugin.Logger.LogWarning("Could not find out-of-bounds terrain. Has an update changed the scene hierarchy?");
+
+                Plugin.Logger.LogDebug("Change tree/foliage material");
+                Transform trees = environment.Find("Map/Trees");
+                if (trees != null)
+                {
+                    List<Renderer> rends = new(trees.GetComponentsInChildren<Renderer>())
+                    {
+                        tree003.GetComponent<Renderer>(),
+                        tree003.Find("tree.003_LOD1").GetComponent<Renderer>()
+                    };
+                    Material forestTextureSnowy = artificeBlizzardAssets.LoadAsset<Material>("ForestTextureSnowy");
+                    foreach (Renderer rend in rends)
+                    {
+                        if (rend.sharedMaterial.name.StartsWith("ForestTexture"))
+                            rend.material = forestTextureSnowy;
+                    }
+                    tree003.Find("tree.003_LOD2").GetComponent<Renderer>().material = artificeBlizzardAssets.LoadAsset<Material>("TreeFlatLeafless1");
+
+                    Plugin.Logger.LogDebug("Hide Mimcket");
+                    GameObject mimcket = environment.Find("Mimcket")?.gameObject;
+                    GameObject cricketAudio = tree003.Find("CricketAudio")?.gameObject;
+                    if (mimcket != null && cricketAudio != null)
+                    {
+                        mimcket.SetActive(false);
+                        cricketAudio.SetActive(false);
+                    }
+                    else
+                        Plugin.Logger.LogWarning("Could not find Mimcket. Has an update changed the scene hierarchy?");
+                }
+                else
+                    Plugin.Logger.LogWarning("Could not find trees. Has an update changed the scene hierarchy?");
             }
+            else
+                Plugin.Logger.LogWarning("Could not find terrain. Has an update changed the scene hierarchy?");
 
-            Plugin.Logger.LogInfo("Change tree/foliage material");
-            Transform trees = environment.Find("Map/Trees");
-            List<Renderer> rends = new(trees.GetComponentsInChildren<Renderer>())
-            {
-                tree003.GetComponent<Renderer>(),
-                tree003.Find("tree.003_LOD1").GetComponent<Renderer>()
-            };
-            Material forestTextureSnowy = artificeBlizzardAssets.LoadAsset<Material>("ForestTextureSnowy");
-            foreach (Renderer rend in rends)
-            {
-                if (rend.sharedMaterial.name.StartsWith("ForestTexture"))
-                    rend.material = forestTextureSnowy;
-            }
-            tree003.Find("tree.003_LOD2").GetComponent<Renderer>().material = artificeBlizzardAssets.LoadAsset<Material>("TreeFlatLeafless1");
-
-            Plugin.Logger.LogInfo("Hide Mimcket");
-            environment.Find("Mimcket").gameObject.SetActive(false);
-            tree003.Find("CricketAudio").gameObject.SetActive(false);
-
-            Plugin.Logger.LogInfo("Enable blizzard audio");
+            Plugin.Logger.LogDebug("Enable blizzard audio");
             Transform audio = GameObject.Find("/Systems/Audio").transform;
-            audio.Find("BlizzardAmbience").gameObject.SetActive(true);
-            foreach (Transform blizzardAudio in audio.Find("3DBlizzardAudios"))
-                blizzardAudio.gameObject.SetActive(true);
+            GameObject blizzardAmbience = audio?.Find("BlizzardAmbience")?.gameObject;
+            Transform blizzardAudios = audio?.Find("3DBlizzardAudios");
+            if (blizzardAmbience != null && blizzardAudios != null)
+            {
+                blizzardAmbience.SetActive(true);
+                foreach (Transform blizzardAudio in blizzardAudios)
+                    blizzardAudio.gameObject.SetActive(true);
+            }
+            else
+                Plugin.Logger.LogWarning("Could not find blizzard audio. Has an update changed the scene hierarchy?");
 
             artificeBlizzardAssets.Unload(false);
         }
