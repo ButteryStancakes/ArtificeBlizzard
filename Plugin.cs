@@ -6,7 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
+//using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using BepInEx.Configuration;
 
@@ -29,7 +29,7 @@ namespace ArtificeBlizzard
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.6";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.5";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
