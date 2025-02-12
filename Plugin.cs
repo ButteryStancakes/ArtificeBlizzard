@@ -29,7 +29,7 @@ namespace ArtificeBlizzard
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.0.5";
+        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.1.0";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -51,9 +51,9 @@ namespace ArtificeBlizzard
                 "Spawning",
                 "BaboonWeight",
                 1,
-                new ConfigDescription("(Only affects your hosted games) Spawn weight for baboon hawks. Vanilla is 7.\nFor comparison, Old Birds have 45, forest keepers have 23, eyeless dogs have 19, and earth leviathans have 6.",
-                    new AcceptableValueRange<int>(0, 100)
-                ));
+                new ConfigDescription(
+                    "(Only affects your hosted games) Spawn weight for baboon hawks. Vanilla is 7.\nFor comparison, Old Birds have 45, forest keepers have 23, eyeless dogs have 19, and earth leviathans have 6.",
+                    new AcceptableValueRange<int>(0, 100)));
 
             configAlwaysOverrideSpawns = Config.Bind(
                 "Spawning",
@@ -70,10 +70,10 @@ namespace ArtificeBlizzard
             configFogDistance = Config.Bind(
                 "Visuals",
                 "FogDistance",
-                8f,
-                new ConfigDescription("Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5.0, and Dine uses 8.0. Artifice uses 25.0 in vanilla.",
-                    new AcceptableValueRange<float>(2.4f, 25f)
-                ));
+                5.48f,
+                new ConfigDescription(
+                    "Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5.0, and Dine uses 8.0. Artifice uses 25.0 in vanilla.",
+                    new AcceptableValueRange<float>(2.4f, 25f)));
 
             configSnowMode = Config.Bind(
                 "Random",
@@ -85,9 +85,9 @@ namespace ArtificeBlizzard
                 "Random",
                 "SnowyChance",
                 0.25f,
-                new ConfigDescription("The specific chance that \"SnowMode\" will activate the blizzard.\n(0 = never, 1 = guaranteed, 0.5 = 50% chance, or anything in between)",
-                    new AcceptableValueRange<float>(0f, 1f)
-                ));
+                new ConfigDescription(
+                    "The specific chance that \"SnowMode\" will activate the blizzard.\n(0 = never, 1 = guaranteed, 0.5 = 50% chance, or anything in between)",
+                    new AcceptableValueRange<float>(0f, 1f)));
 
             Config.Bind("Random", "AlwaysOverrideSpawns", false, "Legacy setting, moved to \"Spawning\" section");
             Config.Remove(Config["Random", "AlwaysOverrideSpawns"].Definition);
@@ -152,8 +152,10 @@ namespace ArtificeBlizzard
             }
             SpawnableEnemyWithRarity baboons = StartOfRound.Instance.currentLevel.OutsideEnemies.FirstOrDefault(spawnableEnemyWithRarity => spawnableEnemyWithRarity.enemyType.name == "BaboonHawk");
             if (baboons != null)
+            {
                 baboons.rarity = apply ? Plugin.configBaboonWeight.Value : 7;
-            Plugin.Logger.LogInfo("Overridden baboon spawn weight for Artifice");
+                Plugin.Logger.LogInfo("Overridden baboon spawn weight for Artifice");
+            }
         }
 
         static void TransformArtificeScene()
