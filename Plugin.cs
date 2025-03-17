@@ -9,6 +9,7 @@ using UnityEngine;
 //using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using BepInEx.Configuration;
+using BepInEx.Bootstrap;
 
 namespace ArtificeBlizzard
 {
@@ -27,9 +28,11 @@ namespace ArtificeBlizzard
     }
 
     [BepInPlugin(PLUGIN_GUID, PLUGIN_NAME, PLUGIN_VERSION)]
+    [BepInDependency(GUID_LOBBY_COMPATIBILITY, BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(GUID_REBALANCED_MOONS, BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
-        const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.1.0";
+        internal const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.2.0";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -37,9 +40,26 @@ namespace ArtificeBlizzard
         internal static ConfigEntry<SnowMode> configSnowMode;
         internal static ConfigEntry<FogColor> configFogColor;
 
+        const string GUID_LOBBY_COMPATIBILITY = "BMX.LobbyCompatibility";
+        internal const string GUID_REBALANCED_MOONS = "dopadream.lethalcompany.rebalancedmoons";
+
+        internal static string terrainMat = "ArtificeTerrainSplatmapLit";
+
         void Awake()
         {
             Logger = base.Logger;
+
+            if (Chainloader.PluginInfos.ContainsKey(GUID_LOBBY_COMPATIBILITY))
+            {
+                Logger.LogInfo("CROSS-COMPATIBILITY - Lobby Compatibility detected");
+                LobbyCompatibility.Init();
+            }
+
+            if (Chainloader.PluginInfos.ContainsKey(GUID_REBALANCED_MOONS))
+            {
+                Logger.LogInfo("CROSS-COMPATIBILITY - Rebalanced Moons detected");
+                terrainMat += " 3";
+            }
 
             configDaytimeSpawns = Config.Bind(
                 "Spawning",
@@ -73,7 +93,7 @@ namespace ArtificeBlizzard
                 5.48f,
                 new ConfigDescription(
                     "Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5.0, and Dine uses 8.0. Artifice uses 25.0 in vanilla.",
-                    new AcceptableValueRange<float>(2.4f, 25f)));
+                    new AcceptableValueRange<float>(1f, 25f)));
 
             configSnowMode = Config.Bind(
                 "Random",
@@ -228,7 +248,7 @@ namespace ArtificeBlizzard
             Transform artificeTerrainCutDown = environment.Find("ArtificeTerrainCutDown");
             if (artificeTerrainCutDown != null)
             {
-                artificeTerrainCutDown.GetComponent<Renderer>().material = artificeBlizzardAssets.LoadAsset<Material>("ArtificeTerrainSplatmapLit");
+                artificeTerrainCutDown.GetComponent<Renderer>().material = artificeBlizzardAssets.LoadAsset<Material>(Plugin.terrainMat);
                 artificeTerrainCutDown.tag = "Snow";
 
                 Plugin.Logger.LogDebug("Change OOB material");
