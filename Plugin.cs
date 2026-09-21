@@ -32,7 +32,7 @@ namespace ArtificeBlizzard
     [BepInDependency(GUID_REBALANCED_MOONS, BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
-        internal const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.3.0";
+        internal const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.3.1";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -121,18 +121,18 @@ namespace ArtificeBlizzard
     [HarmonyPatch]
     class ArtificeBlizzardPatches
     {
-        [HarmonyPatch(typeof(StartOfRound), "Awake")]
+        [HarmonyPatch(typeof(StartOfRound), nameof(StartOfRound.Awake))]
         [HarmonyPostfix]
-        static void StartOfRoundPostAwake(StartOfRound __instance)
+        static void StartOfRound_Post_Awake(StartOfRound __instance)
         {
             SelectableLevel artifice = __instance.levels.FirstOrDefault(level => level.name == "ArtificeLevel");
             artifice.levelIncludesSnowFootprints = true;
             Plugin.Logger.LogDebug("Enabled snow footprint caching on Artifice");
         }
 
-        [HarmonyPatch(typeof(RoundManager), "SetToCurrentLevelWeather")]
+        [HarmonyPatch(typeof(RoundManager), nameof(RoundManager.SetToCurrentLevelWeather))]
         [HarmonyPostfix]
-        static void RoundManagerPostSetToCurrentLevelWeather(RoundManager __instance)
+        static void RoundManager_Post_SetToCurrentLevelWeather(RoundManager __instance)
         {
             if (__instance.currentLevel.name == "ArtificeLevel")
                 ArtificeSceneTransformer.RandomizeSnowyWeather();
@@ -142,6 +142,18 @@ namespace ArtificeBlizzard
     class ArtificeSceneTransformer
     {
         public static bool snowy;
+
+        static MoldSpreadManager moldSpreadManager;
+        internal static MoldSpreadManager MoldSpreadManager
+        {
+            get
+            {
+                if (moldSpreadManager == null)
+                    moldSpreadManager = Object.FindAnyObjectByType<MoldSpreadManager>();
+
+                return moldSpreadManager;
+            }
+        }
 
         internal static void RandomizeSnowyWeather()
         {
@@ -326,6 +338,12 @@ namespace ArtificeBlizzard
             }
             else
                 Plugin.Logger.LogWarning("Could not find blizzard audio. Has an update changed the scene hierarchy?");
+
+            if (MoldSpreadManager != null && MoldSpreadManager.generatedAmountThisDay > 0 && MoldSpreadManager.moldMaterials.Length >= 2 && MoldSpreadManager.moldMaterials[1] != null)
+            {
+                MoldSpreadManager.grassInstancer.material = MoldSpreadManager.moldMaterials[1];
+                Plugin.Logger.LogDebug("Snowy shrouds");
+            }
 
             artificeBlizzardAssets.Unload(false);
         }
