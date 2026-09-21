@@ -32,7 +32,7 @@ namespace ArtificeBlizzard
     [BepInDependency(GUID_REBALANCED_MOONS, BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
-        internal const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.2.0";
+        internal const string PLUGIN_GUID = "butterystancakes.lethalcompany.artificeblizzard", PLUGIN_NAME = "Artifice Blizzard", PLUGIN_VERSION = "1.3.0";
         internal static new ManualLogSource Logger;
         internal static ConfigEntry<bool> configDaytimeSpawns, configAlwaysOverrideSpawns;
         internal static ConfigEntry<int> configBaboonWeight;
@@ -43,7 +43,7 @@ namespace ArtificeBlizzard
         const string GUID_LOBBY_COMPATIBILITY = "BMX.LobbyCompatibility";
         internal const string GUID_REBALANCED_MOONS = "dopadream.lethalcompany.rebalancedmoons";
 
-        internal static string terrainMat = "ArtificeTerrainSplatmapLit";
+        internal static bool REPLACE_MATERIAL;
 
         void Awake()
         {
@@ -58,7 +58,7 @@ namespace ArtificeBlizzard
             if (Chainloader.PluginInfos.ContainsKey(GUID_REBALANCED_MOONS))
             {
                 Logger.LogInfo("CROSS-COMPATIBILITY - Rebalanced Moons detected");
-                terrainMat += " 3";
+                REPLACE_MATERIAL = true;
             }
 
             configDaytimeSpawns = Config.Bind(
@@ -90,7 +90,7 @@ namespace ArtificeBlizzard
             configFogDistance = Config.Bind(
                 "Visuals",
                 "FogDistance",
-                5.48f,
+                8f,
                 new ConfigDescription(
                     "Controls level of visibility in the snowstorm. (Lower value means denser fog)\nFor comparison, Rend uses 3.7, Titan uses 5.0, and Dine uses 8.0. Artifice uses 25.0 in vanilla.",
                     new AcceptableValueRange<float>(1f, 25f)));
@@ -248,7 +248,22 @@ namespace ArtificeBlizzard
             Transform artificeTerrainCutDown = environment.Find("ArtificeTerrainCutDown");
             if (artificeTerrainCutDown != null)
             {
-                artificeTerrainCutDown.GetComponent<Renderer>().material = artificeBlizzardAssets.LoadAsset<Material>(Plugin.terrainMat);
+                Renderer cutDownRend = artificeTerrainCutDown.GetComponent<Renderer>();
+                if (Plugin.REPLACE_MATERIAL)
+                    cutDownRend.material = artificeBlizzardAssets.LoadAsset<Material>("ArtificeTerrainSplatmapLit 3");
+                else
+                {
+                    cutDownRend.enabled = false;
+                    Transform templateTerrain = environment.Find("TemplateTerrain");
+                    if (templateTerrain != null)
+                    {
+                        templateTerrain.gameObject.SetActive(true);
+                        if (templateTerrain.TryGetComponent(out TerrainCollider terrainCollider))
+                            terrainCollider.enabled = false;
+                    }
+                    else
+                        Plugin.Logger.LogWarning("Could not find unused terrain. Has an update changed the scene hierarchy?");
+                }
                 artificeTerrainCutDown.tag = "Snow";
 
                 Plugin.Logger.LogDebug("Change OOB material");
